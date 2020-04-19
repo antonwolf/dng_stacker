@@ -57,6 +57,7 @@ rem Display an error and exit if no file was found
 if !numberOfFiles! EQU 0 (
 	echo Error! No DNG files found. Please please DNG files in the current folder and try again.
 	echo Step 0: Nothing found > dng_stacker.log
+	pause
 	exit
 )
 
@@ -95,6 +96,7 @@ if exist *.tif (
 		dng_validate.exe -1 %%~ni %%~ni.dng >> dng_stacker.log 2>>&1
 		if errorlevel 1 (
 			echo         Error! Please check the dng_stacker.log for details.
+			pause
 			exit
 		)
 	)
@@ -108,6 +110,7 @@ for %%i in (*.tif) do set imCommand=!imCommand! ( %%i -evaluate Multiply !amplif
 convert !imCommand! -evaluate-sequence mean temp.tif >> dng_stacker.log 2>>&1
 if errorlevel 1 (
 	echo         Error! Please check the dng_stacker.log for details.
+	pause
 	exit
 )
 
@@ -156,6 +159,7 @@ if !amplification! NEQ 1 (
 	exiftool -n -overwrite_original -IFD0:BlackLevel="!newBlackLevels!" -IFD0:WhiteLevel="!newWhiteLevel!" temp.dng >> dng_stacker.log 2>>&1
 	if errorlevel 1 (
 		echo         Error! Please check the dng_stacker.log for details.
+		pause
 		exit
 	)
 	echo.
@@ -168,7 +172,7 @@ if !totalExposureTime! GTR 1 (
 )
 
 set resultDNG=!firstFile!-stack!numberOfFiles!
-echo Step 4: Writing clean DNG to !firstFile!
+echo Step 4: Writing clean DNG to !resultDNG!.dng
 echo Step 4 >> dng_stacker.log
 dng_validate.exe -dng !resultDNG! temp.dng >> dng_stacker.log 2>>&1
 echo.
@@ -178,6 +182,10 @@ del temp.dng
 del *.tif
 echo.
 
-echo Fully done. Please enjoy your new stacked DNG called !resultDNG!.
-
+echo Fully done. Please enjoy your new stacked DNG called !resultDNG!.dng
+echo.
+echo Please move or copy !resultDNG!.dng to another folder now.
+echo Once you are done, please press any key. All DNG files will be deleted after that.
+echo.
 pause
+del *.dng
