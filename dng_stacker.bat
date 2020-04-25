@@ -1,4 +1,8 @@
 @echo off
+
+rem If you installed Adobe DNG Converter to a different path, please enter the path here
+set dngConverter="C:\Program Files\Adobe\Adobe DNG Converter\Adobe DNG Converter.exe"
+
 echo +---------------------------------------------------------------+
 echo ^|      ____  _   ________   _____ __             __             ^|
 echo ^|     / __ \/ ^| / / ____/  / ___// /_____ ______/ /_____  _____ ^|
@@ -26,41 +30,54 @@ SETLOCAL EnableDelayedExpansion
 
 rem delete the temp files
 if exist temp.dng del temp.dng
-if exist temp.tif del temp.tif
+if exist *.tif del *.tif
 
 rem Determine number of files and the first file
 set numberOfFiles=0
 set firstFile=
-for %%i in (*.dng) do (
+for %%i in (*.dng *.crw *.cr2 *.cr3 *.raw *.raf *.3fr *.fff *.rwl *.new *.nrw *.pef *.arw) do (
 	set /a numberOfFiles+=1
 	if "!firstFile!"=="" set firstFile=%%~ni
 )
-echo !numberOfFiles! files found. > dng_stacker.log
+echo !numberOfFiles! raw files found. > dng_stacker.log
 if !numberOfFiles! EQU 0 (
-	echo No DNG files found. Please place DNG files in the current folder and try again.
+	echo No raw files found. Please place raw files in the current folder and try again.
 	pause
 	GOTO:EOF
 )
 
 rem Adding up the total exposure time with exiftool because batch does not support floating point
-exiftool -overwrite_original -ExposureTime=0 temp.xmp >> dng_stacker.log 2>>&1
+exiftool -overwrite_original -ExposureTime=0 -ShutterSpeedValue=0 temp.xmp >> dng_stacker.log 2>>&1
 
 set currentFileNumber=0
 set imCommand=
-for %%i in (*.dng) do (
+for %%i in (*.dng *.crw *.cr2 *.cr3 *.raw *.raf *.3fr *.fff *.rwl *.new *.nrw *.pef *.arw) do (
 	set /a currentFileNumber+=1
-	if exist %%~ni.tif (
-		echo [!currentFileNumber! of !numberOfFiles!] %%i: %%~ni.tif found, skipping TIF extraction.
-	) else (
-		echo [!currentFileNumber! of !numberOfFiles!] %%i: Extracting raw image data to %%~ni.tif.
-		echo Extracting %%i to %%~ni.tif >> dng_stacker.log
-		dng_validate.exe -1 %%~ni %%~ni.dng >> dng_stacker.log 2>>&1
+	if /i "%%~xi" NEQ ".dng" (
+		echo [!currentFileNumber! of !numberOfFiles!] %%i: Converting raw to DNG.
+		echo [!currentFileNumber! of !numberOfFiles!] %%i: Converting raw to DNG. >> dng_stacker.log
+		if not exist !dngConverter! (
+			echo Erorr: Adobe DNG Converter not found in path !dngConverter!. Please install it and/or change the path in line 2 of dng_stacker.bat
+			goto err
+		)
+		!dngConverter! -u -p0 %%i >> dng_stacker.log 2>>&1
 		if errorlevel 1 goto err
 	)
 	
-	for /f "tokens=1-3" %%a in ('exiftool -n -p "${BlackLevel;s/ .*//g} ${WhiteLevel;s/ .*//g} $ExposureTime" %%i') do (
+	echo Copying %%~ni.dng to %%~ni-temp.dng >> dng_stacker.log
+	exiftool -OpcodeList3= -OpcodeList2= %%~ni.dng  -o %%~ni-temp.dng >> dng_stacker.log 2>>&1
+	if errorlevel 1 goto err
+
+	echo [!currentFileNumber! of !numberOfFiles!] %%i: Extracting raw image data to %%~ni.tif.
+	echo Extracting %%~ni-temp.dng to %%~ni.tif >> dng_stacker.log
+	dng_validate.exe -1 %%~ni %%~ni-temp.dng >> dng_stacker.log 2>>&1
+	if errorlevel 1 goto err
+	
+	del %%~ni-temp.dng
+	
+	for /f "tokens=1-3" %%a in ('exiftool -n -p "${BlackLevel;s/ .*//g} ${WhiteLevel;s/ .*//g} $ExposureTime" %%~ni.dng') do (
 		set imCommand=!imCommand! ^( %%~ni.tif -level %%a,%%b ^)
-		exiftool -overwrite_original -ExposureTime+=%%c temp.xmp >> dng_stacker.log 2>>&1
+		exiftool -overwrite_original -ExposureTime+=%%c -ShutterSpeedValue+=%%c temp.xmp >> dng_stacker.log 2>>&1
 		if errorlevel 1 goto err
 	)
 )
@@ -103,7 +120,7 @@ exiftool -n^
 if errorlevel 1 goto err
 
 rem write back total exposure time
-exiftool -n -overwrite_original -TagsFromFile temp.xmp "-ExposureTime<ExposureTime" temp.dng >> dng_stacker.log 2>>&1
+exiftool -n -overwrite_original -TagsFromFile temp.xmp "-ExposureTime<ExposureTime" "-ShutterSpeedValue<ShutterSpeedValue" temp.dng >> dng_stacker.log 2>>&1
 if errorlevel 1 goto err
 
 del temp.xmp
