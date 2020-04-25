@@ -42,7 +42,9 @@ if !numberOfFiles! EQU 0 (
 	GOTO:EOF
 )
 
-set totalExposureTime=0
+rem Adding up the total exposure time with exiftool because batch does not support floating point
+exiftool -overwrite_original -ExposureTime=0 temp.xmp >> dng_stacker.log 2>>&1
+
 set currentFileNumber=0
 set imCommand=
 for %%i in (*.dng) do (
@@ -51,41 +53,28 @@ for %%i in (*.dng) do (
 		echo [!currentFileNumber! of !numberOfFiles!] %%i: %%~ni.tif found, skipping TIF extraction.
 	) else (
 		echo [!currentFileNumber! of !numberOfFiles!] %%i: Extracting raw image data to %%~ni.tif.
-		echo Extracting %%i to %%~ni.tif > dng_stacker.log
+		echo Extracting %%i to %%~ni.tif >> dng_stacker.log
 		dng_validate.exe -1 %%~ni %%~ni.dng >> dng_stacker.log 2>>&1
+		if errorlevel 1 goto err
 	)
 	
-	set WhiteLevel=16383
-	set BlackLevel=0
-	set ExposureTime=0
-	for /f "tokens=1,2 delims=	" %%A in ('exiftool -n -t -WhiteLevel -BlackLevel -ExposureTime %%i') do (
-		if "%%A" == "White Level"   for /f "tokens=1"          %%F in ("%%B") do set WhiteLevel=%%F
-		if "%%A" == "Black Level"   for /f "tokens=1"          %%F in ("%%B") do set BlackLevel=%%F
-		if "%%A" == "Exposure Time" for /f "tokens=1 delims=." %%F in ("%%B") do set ExposureTime=%%F
+	for /f "tokens=1-3" %%a in ('exiftool -n -p "${BlackLevel;s/ .*//g} ${WhiteLevel;s/ .*//g} $ExposureTime" %%i') do (
+		set imCommand=!imCommand! ^( %%~ni.tif -level %%a,%%b ^)
+		exiftool -overwrite_original -ExposureTime+=%%c temp.xmp >> dng_stacker.log 2>>&1
+		if errorlevel 1 goto err
 	)
-	set /a totalExposureTime+=!ExposureTime!
-	set imCommand=!imCommand! ^( %%~ni.tif -level !BlackLevel!,!WhiteLevel! ^)
 )
 echo.
 echo Merging TIF files.
 echo convert !imCommand! -evaluate-sequence mean temp.tif >> dng_stacker.log
 convert !imCommand! -evaluate-sequence mean temp.tif >> dng_stacker.log 2>>&1
-if errorlevel 1 (
-	echo         Error! Please check dng_stacker.log for details.
-	pause
-	GOTO:EOF
-)
+if errorlevel 1 goto err
 
 echo Creating DNG based on the metadata from !firstFile!.dng
 echo Creating DNG based on the metadata from !firstFile!.dng >> dng_stacker.log
 
 ren temp.tif temp.dng
 
-if !totalExposureTime! GTR 1 (
-	set exposureTag="-ExposureTime=!totalExposureTime!"
-) else (
-	set exposureTag="-ExposureTime<ExposureTime"
-)
 exiftool -n^
  -IFD0:SubfileType#=0^
  -overwrite_original -TagsFromFile !firstFile!.dng^
@@ -111,10 +100,14 @@ exiftool -n^
  "-IFD0:OpcodeList3<SubIFD:OpcodeList3"^
  !exposureTag!^
  temp.dng >> dng_stacker.log 2>>&1
-if errorlevel 1 (
-	echo         Error! Please check the dng_stacker.log for details.
-	GOTO:EOF
-)
+if errorlevel 1 goto err
+
+rem write back total exposure time
+exiftool -n -overwrite_original -TagsFromFile temp.xmp "-ExposureTime<ExposureTime" temp.dng >> dng_stacker.log 2>>&1
+if errorlevel 1 goto err
+
+del temp.xmp
+
 echo.
 
 set resultDNG=!firstFile!-stack!numberOfFiles!
@@ -132,3 +125,9 @@ echo Once you are done, please press any key. All DNG files will be deleted afte
 echo.
 pause
 del *.dng
+
+GOTO:EOF
+
+:err
+echo Error! Please check the dng_stacker.log for details.
+pause
