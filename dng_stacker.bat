@@ -75,7 +75,7 @@ for %%i in (*.dng *.crw *.cr2 *.cr3 *.raw *.raf *.3fr *.fff *.rwl *.new *.nrw *.
 	
 	del %%~ni-temp.dng
 	
-	for /f "tokens=1-3" %%a in ('exiftool -n -p "${BlackLevel;s/ .*//g} ${WhiteLevel;s/ .*//g} $ExposureTime" %%~ni.dng') do (
+	for /f "tokens=1-3" %%a in ('exiftool -n -p "${SubIFD:BlackLevel;s/ .*//g} ${SubIFD:WhiteLevel;s/ .*//g} $ExposureTime" %%~ni.dng') do (
 		set imCommand=!imCommand! ^( %%~ni.tif -level %%a,%%b ^)
 		exiftool -overwrite_original -ExposureTime+=%%c -ShutterSpeedValue+=%%c temp.xmp >> dng_stacker.log 2>>&1
 		if errorlevel 1 goto err
