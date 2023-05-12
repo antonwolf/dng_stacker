@@ -70,11 +70,10 @@ def main():
 
         # Initialize EXIF data
         subprocess.run([exif_tool, '-overwrite_original', '-ExposureTime=0', '-ShutterSpeedValue=0', temp_xmp],
-                       stdout=log_file, stderr=log_file)
+                       stdout=log_file, stderr=log_file)1
 
         im_commands = []
-        num_files = len(files)
-        for i, file in enumerate(tqdm(files, total=num_files, desc='Converting raw to DNG.')):
+        for file in tqdm(files, total=num_files, desc='Converting raw to DNG.'):
             name, ext = os.path.splitext(file)
             if ext.lower() != '.dng':
                 subprocess.run([dng_converter, '-u', '-p0', file])
